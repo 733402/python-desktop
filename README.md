@@ -1,6 +1,6 @@
 # python-desktop
 
-A simple Python desktop-style app (`main.py`) with a Windows-like launcher and taskbar.
+A simple Python desktop-style app (`main.py`) with a Windows-like desktop, Start menu, and taskbar.
 
 ## Apps included
 - Calculator

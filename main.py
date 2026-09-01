@@ -2,6 +2,7 @@ import json
 import webbrowser
 from pathlib import Path
 from urllib.parse import quote_plus
+from datetime import datetime
 
 try:
     import tkinter as tk
@@ -48,34 +49,38 @@ class DesktopApp:
             raise RuntimeError("tkinter is not available. Install python3-tk to run this desktop app.")
         self.store = DataStore(DATA_FILE)
         self.root = tk.Tk()
-        self.root.title("Python Desktop")
+        self.root.title("PyWindows Desktop")
         self.root.geometry("1000x650")
-        self.root.configure(bg="#1d4f91")
+        self.root.configure(bg="#0a3d91")
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.status_var = tk.StringVar(value="Ready")
+        self.clock_var = tk.StringVar(value="")
         self._build_layout()
+        self._tick_clock()
 
     def _build_layout(self):
-        title = tk.Label(
-            self.root,
-            text="Python Desktop",
-            font=("Segoe UI", 18, "bold"),
-            bg="#1d4f91",
-            fg="white",
-            pady=12,
-        )
-        title.pack(fill="x")
+        title_bar = tk.Frame(self.root, bg="#0b2f6b", height=44)
+        title_bar.pack(fill="x")
+        title_bar.pack_propagate(False)
 
-        desktop_area = tk.Frame(self.root, bg="#1d4f91")
+        tk.Label(
+            title_bar,
+            text="PyWindows",
+            font=("Segoe UI", 15, "bold"),
+            bg="#0b2f6b",
+            fg="white",
+        ).pack(side="left", padx=14)
+
+        desktop_area = tk.Frame(self.root, bg="#0a3d91")
         desktop_area.pack(fill="both", expand=True, padx=16, pady=16)
 
         launchers = [
-            ("Calculator", self.open_calculator),
-            ("Notebook", self.open_notebook),
-            ("Files", self.open_files),
-            ("Web Search", self.open_web_search),
-            ("Users", self.open_users),
+            ("🧮\nCalculator", self.open_calculator),
+            ("📝\nNotebook", self.open_notebook),
+            ("📁\nFiles", self.open_files),
+            ("🌐\nWeb Search", self.open_web_search),
+            ("👤\nUsers", self.open_users),
         ]
 
         for i, (name, command) in enumerate(launchers):
@@ -83,16 +88,32 @@ class DesktopApp:
                 desktop_area,
                 text=name,
                 command=command,
-                width=18,
-                height=2,
+                width=14,
+                height=4,
                 relief="raised",
-                bg="#f6f7fb",
-                font=("Segoe UI", 11),
+                bg="#f4f7ff",
+                activebackground="#d7e6ff",
+                font=("Segoe UI", 10),
             )
-            btn.grid(row=i // 3, column=i % 3, padx=10, pady=10, sticky="w")
+            btn.grid(row=i, column=0, padx=8, pady=6, sticky="w")
 
         taskbar = tk.Frame(self.root, bg="#121212", height=38)
         taskbar.pack(fill="x", side="bottom")
+        taskbar.pack_propagate(False)
+
+        self.start_button = tk.Button(
+            taskbar,
+            text="⊞ Start",
+            command=self.open_start_menu,
+            bg="#1e1e1e",
+            fg="white",
+            bd=0,
+            activebackground="#313131",
+            activeforeground="white",
+            padx=10,
+            pady=5,
+        )
+        self.start_button.pack(side="left", padx=(6, 2), pady=3)
 
         self.user_var = tk.StringVar(
             value=f"User: {self.store.data.get('active_user', 'Admin')}"
@@ -104,8 +125,17 @@ class DesktopApp:
             bg="#121212",
             padx=10,
         )
-        user_label.pack(side="left")
+        user_label.pack(side="left", padx=(10, 0))
         self.user_label = user_label
+
+        clock = tk.Label(
+            taskbar,
+            textvariable=self.clock_var,
+            fg="#e3e3e3",
+            bg="#121212",
+            padx=10,
+        )
+        clock.pack(side="right")
 
         status = tk.Label(
             taskbar,
@@ -114,10 +144,28 @@ class DesktopApp:
             bg="#121212",
             padx=10,
         )
-        status.pack(side="right")
+        status.pack(side="right", padx=(0, 6))
 
     def update_status(self, message: str):
         self.status_var.set(message)
+
+    def _tick_clock(self):
+        self.clock_var.set(datetime.now().strftime("%H:%M:%S  %d-%b-%Y"))
+        self.root.after(1000, self._tick_clock)
+
+    def open_start_menu(self):
+        menu = tk.Menu(self.root, tearoff=0)
+        menu.add_command(label="Calculator", command=self.open_calculator)
+        menu.add_command(label="Notebook", command=self.open_notebook)
+        menu.add_command(label="Files", command=self.open_files)
+        menu.add_command(label="Web Search", command=self.open_web_search)
+        menu.add_command(label="Users", command=self.open_users)
+        menu.add_separator()
+        menu.add_command(label="Exit", command=self.on_close)
+        x = self.start_button.winfo_rootx()
+        y = self.start_button.winfo_rooty() - 210
+        menu.tk_popup(x, y)
+        menu.grab_release()
 
     def open_calculator(self):
         window = tk.Toplevel(self.root)
