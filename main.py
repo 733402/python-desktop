@@ -392,4 +392,11 @@ class DesktopApp:
 
 
 if __name__ == "__main__":
-    DesktopApp().run()
+    if tk is None:
+        raise SystemExit("tkinter is not available. Install python3-tk to run this desktop app.")
+    try:
+        DesktopApp().run()
+    except tk.TclError as exc:
+        raise SystemExit(
+            f"Unable to start GUI ({exc}). Run this app in a graphical desktop session with DISPLAY set."
+        ) from exc
