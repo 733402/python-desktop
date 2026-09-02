@@ -1,16 +1,6 @@
 import json
-import webbrowser
 from pathlib import Path
 from urllib.parse import quote_plus
-from datetime import datetime
-
-try:
-    import tkinter as tk
-    from tkinter import ttk, messagebox
-except ModuleNotFoundError:  # pragma: no cover - depends on system packages
-    tk = None
-    ttk = None
-    messagebox = None
 
 
 DATA_FILE = Path(__file__).with_name("data.json")
@@ -43,360 +33,216 @@ class DataStore:
         self.path.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
 
 
-class DesktopApp:
+class TerminalApp:
     def __init__(self):
-        if tk is None:
-            raise RuntimeError("tkinter is not available. Install python3-tk to run this desktop app.")
         self.store = DataStore(DATA_FILE)
-        self.root = tk.Tk()
-        self.root.title("PyWindows Desktop")
-        self.root.geometry("1000x650")
-        self.root.configure(bg="#0a3d91")
-        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
-        self.status_var = tk.StringVar(value="Ready")
-        self.clock_var = tk.StringVar(value="")
-        self._build_layout()
-        self._tick_clock()
+    @staticmethod
+    def _read(prompt: str = "") -> str:
+        return input(prompt).strip()
 
-    def _build_layout(self):
-        title_bar = tk.Frame(self.root, bg="#0b2f6b", height=44)
-        title_bar.pack(fill="x")
-        title_bar.pack_propagate(False)
+    @staticmethod
+    def _read_multiline(prompt: str) -> str:
+        print(prompt)
+        print("Finish by entering a single '.' on a line.")
+        lines = []
+        while True:
+            line = input()
+            if line == ".":
+                break
+            lines.append(line)
+        return "\n".join(lines)
 
-        tk.Label(
-            title_bar,
-            text="PyWindows",
-            font=("Segoe UI", 15, "bold"),
-            bg="#0b2f6b",
-            fg="white",
-        ).pack(side="left", padx=14)
+    def run(self):
+        while True:
+            active_user = self.store.data.get("active_user", "Admin")
+            print("\n=== PyDesktop Terminal ===")
+            print(f"Active user: {active_user}")
+            print("1) Calculator")
+            print("2) Notebook")
+            print("3) Files")
+            print("4) Web Search")
+            print("5) Users")
+            print("0) Exit")
 
-        desktop_area = tk.Frame(self.root, bg="#0a3d91")
-        desktop_area.pack(fill="both", expand=True, padx=16, pady=16)
-
-        launchers = [
-            ("🧮\nCalculator", self.open_calculator),
-            ("📝\nNotebook", self.open_notebook),
-            ("📁\nFiles", self.open_files),
-            ("🌐\nWeb Search", self.open_web_search),
-            ("👤\nUsers", self.open_users),
-        ]
-
-        for i, (name, command) in enumerate(launchers):
-            btn = tk.Button(
-                desktop_area,
-                text=name,
-                command=command,
-                width=14,
-                height=4,
-                relief="raised",
-                bg="#f4f7ff",
-                activebackground="#d7e6ff",
-                font=("Segoe UI", 10),
-            )
-            btn.grid(row=i, column=0, padx=8, pady=6, sticky="w")
-
-        taskbar = tk.Frame(self.root, bg="#121212", height=38)
-        taskbar.pack(fill="x", side="bottom")
-        taskbar.pack_propagate(False)
-
-        self.start_button = tk.Button(
-            taskbar,
-            text="⊞ Start",
-            command=self.open_start_menu,
-            bg="#1e1e1e",
-            fg="white",
-            bd=0,
-            activebackground="#313131",
-            activeforeground="white",
-            padx=10,
-            pady=5,
-        )
-        self.start_button.pack(side="left", padx=(6, 2), pady=3)
-
-        self.user_var = tk.StringVar(
-            value=f"User: {self.store.data.get('active_user', 'Admin')}"
-        )
-        user_label = tk.Label(
-            taskbar,
-            textvariable=self.user_var,
-            fg="white",
-            bg="#121212",
-            padx=10,
-        )
-        user_label.pack(side="left", padx=(10, 0))
-        self.user_label = user_label
-
-        clock = tk.Label(
-            taskbar,
-            textvariable=self.clock_var,
-            fg="#e3e3e3",
-            bg="#121212",
-            padx=10,
-        )
-        clock.pack(side="right")
-
-        status = tk.Label(
-            taskbar,
-            textvariable=self.status_var,
-            fg="#e3e3e3",
-            bg="#121212",
-            padx=10,
-        )
-        status.pack(side="right", padx=(0, 6))
-
-    def update_status(self, message: str):
-        self.status_var.set(message)
-
-    def _tick_clock(self):
-        self.clock_var.set(datetime.now().strftime("%H:%M:%S  %d-%b-%Y"))
-        self.root.after(1000, self._tick_clock)
-
-    def open_start_menu(self):
-        menu = tk.Menu(self.root, tearoff=0)
-        menu.add_command(label="Calculator", command=self.open_calculator)
-        menu.add_command(label="Notebook", command=self.open_notebook)
-        menu.add_command(label="Files", command=self.open_files)
-        menu.add_command(label="Web Search", command=self.open_web_search)
-        menu.add_command(label="Users", command=self.open_users)
-        menu.add_separator()
-        menu.add_command(label="Exit", command=self.on_close)
-        x = self.start_button.winfo_rootx()
-        y = self.start_button.winfo_rooty() - 210
-        menu.tk_popup(x, y)
-        menu.grab_release()
+            choice = self._read("Select: ")
+            if choice == "1":
+                self.open_calculator()
+            elif choice == "2":
+                self.open_notebook()
+            elif choice == "3":
+                self.open_files()
+            elif choice == "4":
+                self.open_web_search()
+            elif choice == "5":
+                self.open_users()
+            elif choice == "0":
+                self.on_close()
+                break
+            else:
+                print("Invalid option.")
 
     def open_calculator(self):
-        window = tk.Toplevel(self.root)
-        window.title("Calculator")
-        window.geometry("320x420")
-
-        expression = tk.StringVar()
-        tk.Entry(window, textvariable=expression, font=("Segoe UI", 16), justify="right").pack(fill="x", padx=10, pady=10)
-
-        def press(value):
-            expression.set(expression.get() + value)
-
-        def clear():
-            expression.set("")
-
-        def evaluate():
-            expr = expression.get().strip()
+        allowed = set("0123456789+-*/.() ")
+        print("\nCalculator (press Enter on empty line to go back)")
+        while True:
+            expr = self._read("expr> ")
             if not expr:
                 return
-            allowed = set("0123456789+-*/.() ")
             if any(ch not in allowed for ch in expr):
-                messagebox.showerror("Error", "Invalid expression")
-                return
+                print("Invalid expression.")
+                continue
             try:
                 result = eval(expr, {"__builtins__": {}}, {})
-                expression.set(str(result))
-                self.update_status("Calculator: result ready")
+                print(f"= {result}")
             except Exception:
-                messagebox.showerror("Error", "Calculation failed")
-
-        buttons = [
-            "7", "8", "9", "/",
-            "4", "5", "6", "*",
-            "1", "2", "3", "-",
-            "0", ".", "(", ")",
-            "C", "=", "+",
-        ]
-
-        frame = tk.Frame(window)
-        frame.pack(fill="both", expand=True, padx=10, pady=10)
-        row, col = 0, 0
-        for token in buttons:
-            cmd = clear if token == "C" else evaluate if token == "=" else lambda t=token: press(t)
-            ttk.Button(frame, text=token, command=cmd).grid(row=row, column=col, sticky="nsew", padx=4, pady=4)
-            col += 1
-            if col == 4:
-                row += 1
-                col = 0
-
-        for i in range(5):
-            frame.rowconfigure(i, weight=1)
-        for i in range(4):
-            frame.columnconfigure(i, weight=1)
+                print("Calculation failed.")
 
     def open_notebook(self):
-        window = tk.Toplevel(self.root)
-        window.title("Notebook")
-        window.geometry("620x460")
+        notes = self.store.data.get("notes", "")
+        print("\nCurrent notes:")
+        print("-" * 30)
+        print(notes if notes else "(empty)")
+        print("-" * 30)
 
-        text = tk.Text(window, wrap="word", font=("Consolas", 11))
-        text.pack(fill="both", expand=True, padx=10, pady=10)
-        text.insert("1.0", self.store.data.get("notes", ""))
+        choice = self._read("Overwrite notes? (y/N): ").lower()
+        if choice != "y":
+            return
 
-        def save_notes():
-            self.store.data["notes"] = text.get("1.0", "end").rstrip("\n")
-            self.store.save()
-            self.update_status("Notebook: saved")
-
-        ttk.Button(window, text="Save", command=save_notes).pack(pady=(0, 10))
+        updated = self._read_multiline("Enter new notes:")
+        self.store.data["notes"] = updated
+        self.store.save()
+        print("Notes saved.")
 
     def open_files(self):
-        window = tk.Toplevel(self.root)
-        window.title("Files")
-        window.geometry("640x460")
-
-        left = tk.Frame(window)
-        left.pack(side="left", fill="y", padx=(10, 5), pady=10)
-
-        right = tk.Frame(window)
-        right.pack(side="left", fill="both", expand=True, padx=(5, 10), pady=10)
-
-        file_list = tk.Listbox(left, width=24)
-        file_list.pack(fill="y", expand=True)
-
-        editor = tk.Text(right, wrap="word", font=("Consolas", 11))
-        editor.pack(fill="both", expand=True)
-
-        name_var = tk.StringVar()
-        ttk.Entry(left, textvariable=name_var).pack(fill="x", pady=(10, 5))
-
         files = self.store.data.setdefault("files", {})
 
-        def refresh_files(select_name=None):
-            file_list.delete(0, "end")
+        while True:
+            print("\nFiles")
             names = sorted(files.keys())
-            for filename in names:
-                file_list.insert("end", filename)
-            if select_name and select_name in names:
-                index = names.index(select_name)
-                file_list.selection_set(index)
-                file_list.event_generate("<<ListboxSelect>>")
+            if names:
+                for i, name in enumerate(names, start=1):
+                    print(f"{i}) {name}")
+            else:
+                print("(no files)")
 
-        def on_select(_=None):
-            selected = file_list.curselection()
-            if not selected:
+            print("a) Create/Save file")
+            print("v) View file")
+            print("d) Delete file")
+            print("b) Back")
+
+            choice = self._read("Select: ").lower()
+            if choice == "b":
                 return
-            filename = file_list.get(selected[0])
-            editor.delete("1.0", "end")
-            editor.insert("1.0", files.get(filename, ""))
-            name_var.set(filename)
-
-        def create_or_save():
-            filename = name_var.get().strip()
-            if not filename:
-                messagebox.showwarning("Files", "Enter a file name")
-                return
-            files[filename] = editor.get("1.0", "end").rstrip("\n")
-            self.store.save()
-            refresh_files(select_name=filename)
-            self.update_status(f"Files: saved {filename}")
-
-        def delete_file():
-            filename = name_var.get().strip()
-            if filename in files:
+            if choice == "a":
+                filename = self._read("File name: ")
+                if not filename:
+                    print("File name is required.")
+                    continue
+                current = files.get(filename, "")
+                if current:
+                    print("Current content:")
+                    print(current)
+                    print("-" * 30)
+                content = self._read_multiline("Enter file content:")
+                files[filename] = content
+                self.store.save()
+                print(f"Saved: {filename}")
+            elif choice == "v":
+                filename = self._read("File name to view: ")
+                if filename not in files:
+                    print("File not found.")
+                    continue
+                print("-" * 30)
+                print(files[filename] or "(empty)")
+                print("-" * 30)
+            elif choice == "d":
+                filename = self._read("File name to delete: ")
+                if filename not in files:
+                    print("File not found.")
+                    continue
                 del files[filename]
                 self.store.save()
-                editor.delete("1.0", "end")
-                name_var.set("")
-                refresh_files()
-                self.update_status(f"Files: deleted {filename}")
-
-        ttk.Button(left, text="Create/Save", command=create_or_save).pack(fill="x", pady=2)
-        ttk.Button(left, text="Delete", command=delete_file).pack(fill="x", pady=2)
-
-        file_list.bind("<<ListboxSelect>>", on_select)
-        refresh_files()
+                print(f"Deleted: {filename}")
+            else:
+                print("Invalid option.")
 
     def open_web_search(self):
-        window = tk.Toplevel(self.root)
-        window.title("Web Search")
-        window.geometry("540x360")
-
-        query_var = tk.StringVar()
-        row = tk.Frame(window)
-        row.pack(fill="x", padx=10, pady=10)
-
-        ttk.Entry(row, textvariable=query_var).pack(side="left", fill="x", expand=True)
-
-        history = tk.Listbox(window)
-        history.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-
         searches = self.store.data.setdefault("search_history", [])
 
-        def refresh_history():
-            history.delete(0, "end")
-            for query in searches[-50:]:
-                history.insert("end", query)
+        while True:
+            print("\nWeb Search")
+            print("1) New search")
+            print("2) View search history")
+            print("0) Back")
+            choice = self._read("Select: ")
 
-        def search():
-            query = query_var.get().strip()
-            if not query:
+            if choice == "0":
                 return
-            searches.append(query)
-            self.store.save()
-            refresh_history()
-            webbrowser.open_new_tab(f"https://www.google.com/search?q={quote_plus(query)}")
-            self.update_status("Web Search: opened browser")
-
-        ttk.Button(row, text="Search", command=search).pack(side="left", padx=(8, 0))
-        refresh_history()
+            if choice == "1":
+                query = self._read("Query: ")
+                if not query:
+                    print("Query is required.")
+                    continue
+                searches.append(query)
+                self.store.save()
+                url = f"https://www.google.com/search?q={quote_plus(query)}"
+                print(f"Saved query. Open this URL manually:\n{url}")
+            elif choice == "2":
+                if not searches:
+                    print("No search history.")
+                else:
+                    print("Recent searches:")
+                    for q in searches[-50:]:
+                        print(f"- {q}")
+            else:
+                print("Invalid option.")
 
     def open_users(self):
-        window = tk.Toplevel(self.root)
-        window.title("Users")
-        window.geometry("420x320")
-
         users = self.store.data.setdefault("users", ["Admin"])
-        active = self.store.data.get("active_user", users[0])
 
-        users_box = tk.Listbox(window)
-        users_box.pack(fill="both", expand=True, padx=10, pady=10)
+        while True:
+            active = self.store.data.get("active_user", users[0] if users else "Admin")
+            print("\nUsers")
+            for i, user in enumerate(users, start=1):
+                marker = " *" if user == active else ""
+                print(f"{i}) {user}{marker}")
 
-        name_var = tk.StringVar()
-        ttk.Entry(window, textvariable=name_var).pack(fill="x", padx=10)
+            print("a) Add user")
+            print("s) Set active user")
+            print("b) Back")
 
-        def refresh_users(select_name=None):
-            users_box.delete(0, "end")
-            for u in users:
-                users_box.insert("end", u)
-            if select_name and select_name in users:
-                users_box.selection_set(users.index(select_name))
-
-        def add_user():
-            username = name_var.get().strip()
-            if not username:
+            choice = self._read("Select: ").lower()
+            if choice == "b":
                 return
-            if username not in users:
+            if choice == "a":
+                username = self._read("New username: ")
+                if not username:
+                    print("Username is required.")
+                    continue
+                if username in users:
+                    print("User already exists.")
+                    continue
                 users.append(username)
                 self.store.save()
-                refresh_users(select_name=username)
-                self.update_status(f"Users: added {username}")
-
-        def set_active():
-            selected = users_box.curselection()
-            if not selected:
-                return
-            username = users_box.get(selected[0])
-            self.store.data["active_user"] = username
-            self.store.save()
-            self.user_var.set(f"User: {username}")
-            self.update_status(f"Users: active user is {username}")
-
-        ttk.Button(window, text="Add User", command=add_user).pack(fill="x", padx=10, pady=(8, 4))
-        ttk.Button(window, text="Set Active User", command=set_active).pack(fill="x", padx=10)
-
-        refresh_users(select_name=active)
+                print(f"Added user: {username}")
+            elif choice == "s":
+                username = self._read("Username to activate: ")
+                if username not in users:
+                    print("User not found.")
+                    continue
+                self.store.data["active_user"] = username
+                self.store.save()
+                print(f"Active user set to: {username}")
+            else:
+                print("Invalid option.")
 
     def on_close(self):
         self.store.save()
-        self.root.destroy()
-
-    def run(self):
-        self.root.mainloop()
 
 
 if __name__ == "__main__":
-    if tk is None:
-        raise SystemExit("tkinter is not available. Install python3-tk to run this desktop app.")
     try:
-        DesktopApp().run()
-    except tk.TclError as exc:
-        raise SystemExit(
-            f"Unable to start GUI ({exc}). Run this app in a graphical desktop session with DISPLAY set."
-        ) from exc
+        TerminalApp().run()
+    except (EOFError, KeyboardInterrupt):
+        print("\nExiting.")

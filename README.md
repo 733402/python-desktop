@@ -1,12 +1,12 @@
 # python-desktop
 
-A simple Python desktop-style app (`main.py`) with a Windows-like desktop, Start menu, and taskbar.
+A simple Python terminal app (`main.py`) that provides desktop-like utilities from the command line.
 
 ## Apps included
 - Calculator
 - Notebook (saved notes)
 - Files (create/edit/delete simple text files)
-- Web Search (opens browser + keeps search history)
+- Web Search (stores search history and prints search URL)
 - Users (add users + set active user)
 
 All app data is persisted in `data.json`.
@@ -16,5 +16,4 @@ All app data is persisted in `data.json`.
 python main.py
 ```
 
-If your system does not have Tk installed, install `python3-tk` first.  
-This app also needs a graphical desktop session (`DISPLAY` must be set).
+No graphical desktop session is required.
