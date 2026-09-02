@@ -1,9 +1,16 @@
 import json
+import hashlib
+import hmac
+import secrets
+from getpass import getpass
 from pathlib import Path
+from urllib.error import URLError
+from urllib.request import urlopen
 from urllib.parse import quote_plus
 
 
 DATA_FILE = Path(__file__).with_name("data.json")
+CONFIG_FILE = Path(__file__).with_name("config.json")
 
 
 class DataStore:
@@ -12,6 +19,7 @@ class DataStore:
         self.data = {
             "users": ["Admin"],
             "active_user": "Admin",
+            "user_password_hashes": {},
             "notes": "",
             "files": {},
             "search_history": [],
@@ -26,16 +34,74 @@ class DataStore:
             loaded = json.loads(self.path.read_text(encoding="utf-8"))
             if isinstance(loaded, dict):
                 self.data.update(loaded)
+            users = [user for user in self.data.get("users", []) if isinstance(user, str) and user]
+            if not users:
+                users = ["Admin"]
+            self.data["users"] = users
+
+            active_user = self.data.get("active_user")
+            if active_user not in users:
+                self.data["active_user"] = users[0]
+
+            password_hashes = self.data.get("user_password_hashes")
+            if not isinstance(password_hashes, dict):
+                password_hashes = {}
+            legacy_passwords = self.data.get("user_passwords")
+            if not isinstance(legacy_passwords, dict):
+                legacy_passwords = {}
+
+            for user in users:
+                stored_hash = password_hashes.get(user)
+                if isinstance(stored_hash, str) and self._is_password_hash(stored_hash):
+                    continue
+                legacy_password = legacy_passwords.get(user)
+                if isinstance(legacy_password, str):
+                    password_hashes[user] = self.hash_password(legacy_password)
+                elif user == "Admin":
+                    password_hashes[user] = self.hash_password("admin")
+                else:
+                    password_hashes[user] = self.hash_password("")
+            self.data["user_password_hashes"] = {user: password_hashes[user] for user in users}
+            self.data.pop("user_passwords", None)
         except (json.JSONDecodeError, OSError):
             self.save()
 
     def save(self):
         self.path.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
 
+    @staticmethod
+    def _is_password_hash(value: str) -> bool:
+        parts = value.split(":")
+        return (
+            len(parts) == 2
+            and len(parts[0]) == 32
+            and len(parts[1]) == 64
+            and all(ch in "0123456789abcdef" for ch in value)
+        )
+
+    @staticmethod
+    def hash_password(password: str) -> str:
+        salt = secrets.token_hex(16)
+        digest = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), bytes.fromhex(salt), 200_000
+        ).hex()
+        return f"{salt}:{digest}"
+
+    @staticmethod
+    def verify_password(stored_hash: str, password: str) -> bool:
+        if not DataStore._is_password_hash(stored_hash):
+            return False
+        salt, expected = stored_hash.split(":")
+        digest = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), bytes.fromhex(salt), 200_000
+        ).hex()
+        return hmac.compare_digest(digest, expected)
+
 
 class TerminalApp:
     def __init__(self):
         self.store = DataStore(DATA_FILE)
+        self.system_config = ConfigStore(CONFIG_FILE)
 
     @staticmethod
     def _read(prompt: str = "") -> str:
@@ -63,6 +129,7 @@ class TerminalApp:
             print("3) Files")
             print("4) Web Search")
             print("5) Users")
+            print("6) Neofetch")
             print("0) Exit")
 
             choice = self._read("Select: ")
@@ -76,6 +143,8 @@ class TerminalApp:
                 self.open_web_search()
             elif choice == "5":
                 self.open_users()
+            elif choice == "6":
+                self.open_neofetch()
             elif choice == "0":
                 self.on_close()
                 break
@@ -186,8 +255,13 @@ class TerminalApp:
                     continue
                 searches.append(query)
                 self.store.save()
-                url = f"https://www.google.com/search?q={quote_plus(query)}"
-                print(f"Saved query. Open this URL manually:\n{url}")
+                results = self._search_web(query)
+                if not results:
+                    print("No results found.")
+                    continue
+                print("Results:")
+                for i, item in enumerate(results, start=1):
+                    print(f"{i}) {item}")
             elif choice == "2":
                 if not searches:
                     print("No search history.")
@@ -198,8 +272,41 @@ class TerminalApp:
             else:
                 print("Invalid option.")
 
+    @staticmethod
+    def _search_web(query: str):
+        url = (
+            "https://api.duckduckgo.com/?"
+            f"q={quote_plus(query)}&format=json&no_html=1&skip_disambig=1"
+        )
+        try:
+            with urlopen(url, timeout=10) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except (OSError, URLError, ValueError):
+            print("Search failed.")
+            return []
+
+        results = []
+        abstract = payload.get("AbstractText")
+        if abstract:
+            heading = payload.get("Heading") or "Top result"
+            results.append(f"{heading}: {abstract}")
+
+        for item in payload.get("RelatedTopics", []):
+            if len(results) >= 5:
+                break
+            if isinstance(item, dict) and item.get("Text"):
+                results.append(item["Text"])
+            elif isinstance(item, dict) and isinstance(item.get("Topics"), list):
+                for nested in item["Topics"]:
+                    if len(results) >= 5:
+                        break
+                    if isinstance(nested, dict) and nested.get("Text"):
+                        results.append(nested["Text"])
+        return results[:5]
+
     def open_users(self):
         users = self.store.data.setdefault("users", ["Admin"])
+        password_hashes = self.store.data.setdefault("user_password_hashes", {})
 
         while True:
             active = self.store.data.get("active_user", users[0] if users else "Admin")
@@ -210,6 +317,7 @@ class TerminalApp:
 
             print("a) Add user")
             print("s) Set active user")
+            print("p) Change user password")
             print("b) Back")
 
             choice = self._read("Select: ").lower()
@@ -223,7 +331,12 @@ class TerminalApp:
                 if username in users:
                     print("User already exists.")
                     continue
+                password = getpass("New password: ").strip()
+                if not password:
+                    print("Password is required.")
+                    continue
                 users.append(username)
+                password_hashes[username] = DataStore.hash_password(password)
                 self.store.save()
                 print(f"Added user: {username}")
             elif choice == "s":
@@ -231,14 +344,94 @@ class TerminalApp:
                 if username not in users:
                     print("User not found.")
                     continue
+                password = getpass("Password: ").strip()
+                if not DataStore.verify_password(password_hashes.get(username, ""), password):
+                    print("Incorrect password.")
+                    continue
                 self.store.data["active_user"] = username
                 self.store.save()
                 print(f"Active user set to: {username}")
+            elif choice == "p":
+                username = self._read("Username: ")
+                if username not in users:
+                    print("User not found.")
+                    continue
+                current = getpass("Current password: ").strip()
+                if not DataStore.verify_password(password_hashes.get(username, ""), current):
+                    print("Incorrect password.")
+                    continue
+                updated = getpass("New password: ").strip()
+                if not updated:
+                    print("Password is required.")
+                    continue
+                password_hashes[username] = DataStore.hash_password(updated)
+                self.store.save()
+                print("Password updated.")
             else:
                 print("Invalid option.")
 
+    def open_neofetch(self):
+        cfg = self.system_config.data
+        active_user = self.store.data.get("active_user", "Admin")
+        host = cfg.get("hostname", "pydesktop")
+        lines = [
+            f"{active_user}@{host}",
+            "-" * (len(active_user) + len(host) + 1),
+            f"OS: {cfg.get('os', 'PyDesktop OS')}",
+            f"Kernel: {cfg.get('kernel', '6.6.0-pydesktop')}",
+            f"CPU: {cfg.get('cpu', 'Python Virtual CPU')}",
+            f"GPU: {cfg.get('gpu', 'Python Virtual GPU')}",
+            f"RAM: {cfg.get('ram', '8 GB')}",
+            f"Shell: {cfg.get('shell', 'python')}",
+        ]
+        art = [
+            "    ____        ",
+            "   / __ \\__  __ ",
+            "  / /_/ / / / / ",
+            " / ____/ /_/ /  ",
+            "/_/    \\__, /   ",
+            "      /____/    ",
+        ]
+        print("\nNeofetch")
+        width = max(len(part) for part in art)
+        for i in range(max(len(art), len(lines))):
+            left = art[i] if i < len(art) else ""
+            right = lines[i] if i < len(lines) else ""
+            print(f"{left:<{width}}  {right}")
+
     def on_close(self):
         self.store.save()
+
+
+class ConfigStore:
+    def __init__(self, path: Path):
+        self.path = path
+        self.data = {
+            "hostname": "pydesktop",
+            "os": "PyDesktop OS x86_64",
+            "kernel": "6.6.0-pydesktop",
+            "cpu": "Intel Core i9-14900KS (fake)",
+            "gpu": "NVIDIA RTX 5090 (fake)",
+            "ram": "64 GB DDR5 (fake)",
+            "shell": "python",
+        }
+        self.load()
+
+    def load(self):
+        if not self.path.exists():
+            self.save()
+            return
+        try:
+            loaded = json.loads(self.path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                for key, value in loaded.items():
+                    if isinstance(value, str):
+                        self.data[key] = value
+        except (json.JSONDecodeError, OSError):
+            self.save()
+
+    def save(self):
+        self.path.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
 
 
 if __name__ == "__main__":

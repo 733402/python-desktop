@@ -3,6 +3,9 @@
     "Admin"
   ],
   "active_user": "Admin",
+  "user_password_hashes": {
+    "Admin": "e2d76f7941ce9c5ac9e0f287b8a5dc17:0a0662c4a0507c6946d54900acf05fbe535064277e629c244f96ef32dd7677cd"
+  },
   "notes": "",
   "files": {},
   "search_history": []
