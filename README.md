@@ -16,4 +16,4 @@ All app data is persisted in `data.json`.
 python main.py
 ```
 
-If your system does not have Tk installed, install `python3-tk` first.
+If your system does not have Tk installed, install the Tk package for your platform (for example, `python3-tk` on Debian/Ubuntu).

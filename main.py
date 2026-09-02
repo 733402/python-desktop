@@ -14,6 +14,8 @@ except ModuleNotFoundError:  # pragma: no cover - depends on system packages
 
 
 DATA_FILE = Path(__file__).with_name("data.json")
+MAX_SEARCH_HISTORY = 50
+MAX_CALC_EXPRESSION_LENGTH = 100
 
 
 class DataStore:
@@ -35,7 +37,34 @@ class DataStore:
         try:
             loaded = json.loads(self.path.read_text(encoding="utf-8"))
             if isinstance(loaded, dict):
-                self.data.update(loaded)
+                users = loaded.get("users")
+                if isinstance(users, list):
+                    valid_users = [u for u in users if isinstance(u, str) and u]
+                    if valid_users:
+                        self.data["users"] = valid_users
+
+                active_user = loaded.get("active_user")
+                if isinstance(active_user, str) and active_user in self.data["users"]:
+                    self.data["active_user"] = active_user
+                else:
+                    self.data["active_user"] = self.data["users"][0]
+
+                notes = loaded.get("notes")
+                if isinstance(notes, str):
+                    self.data["notes"] = notes
+
+                files = loaded.get("files")
+                if isinstance(files, dict):
+                    self.data["files"] = {
+                        name: content
+                        for name, content in files.items()
+                        if isinstance(name, str) and isinstance(content, str)
+                    }
+
+                search_history = loaded.get("search_history")
+                if isinstance(search_history, list):
+                    valid_searches = [q for q in search_history if isinstance(q, str)]
+                    self.data["search_history"] = valid_searches[-MAX_SEARCH_HISTORY:]
         except (json.JSONDecodeError, OSError):
             self.save()
 
@@ -46,7 +75,9 @@ class DataStore:
 class DesktopApp:
     def __init__(self):
         if tk is None:
-            raise RuntimeError("tkinter is not available. Install python3-tk to run this desktop app.")
+            raise RuntimeError(
+                "tkinter is not available. Install Tk for your platform (for example, python3-tk on Debian/Ubuntu)."
+            )
         self.store = DataStore(DATA_FILE)
         self.root = tk.Tk()
         self.root.title("PyWindows Desktop")
@@ -185,8 +216,14 @@ class DesktopApp:
             expr = expression.get().strip()
             if not expr:
                 return
+            if len(expr) > MAX_CALC_EXPRESSION_LENGTH:
+                messagebox.showerror("Error", "Expression too long")
+                return
             allowed = set("0123456789+-*/.() ")
             if any(ch not in allowed for ch in expr):
+                messagebox.showerror("Error", "Invalid expression")
+                return
+            if "**" in expr or "//" in expr:
                 messagebox.showerror("Error", "Invalid expression")
                 return
             try:
@@ -329,6 +366,8 @@ class DesktopApp:
             if not query:
                 return
             searches.append(query)
+            if len(searches) > MAX_SEARCH_HISTORY:
+                del searches[:-MAX_SEARCH_HISTORY]
             self.store.save()
             refresh_history()
             webbrowser.open_new_tab(f"https://www.google.com/search?q={quote_plus(query)}")
@@ -392,4 +431,8 @@ class DesktopApp:
 
 
 if __name__ == "__main__":
-    DesktopApp().run()
+    try:
+        DesktopApp().run()
+    except RuntimeError as exc:
+        print(exc)
+        raise SystemExit(1)
