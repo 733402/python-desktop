@@ -16,4 +16,5 @@ All app data is persisted in `data.json`.
 python main.py
 ```
 
-If your system does not have Tk installed, install `python3-tk` first.
+If your system does not have Tk installed, install `python3-tk` first.  
+This app also needs a graphical desktop session (`DISPLAY` must be set).
