@@ -1,0 +1,9 @@
+{
+  "hostname": "pydesktop",
+  "os": "PyDesktop OS x86_64",
+  "kernel": "6.6.0-pydesktop",
+  "cpu": "Intel Core i9-14900KS (fake)",
+  "gpu": "NVIDIA RTX 5090 (fake)",
+  "ram": "64 GB DDR5 (fake)",
+  "shell": "python"
+}
